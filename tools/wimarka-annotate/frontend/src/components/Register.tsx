@@ -17,9 +17,10 @@ const Register: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1); // 1: User Type, 2: Personal Info, 3: Account Details
+  const [currentStep, setCurrentStep] = useState(1); // 1: User Type, 2: Personal Info, 3: Account Details, 4: Onboarding (for annotators)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -155,9 +156,17 @@ const Register: React.FC = () => {
         is_evaluator: formData.user_type === 'evaluator'
       };
       await register(registerData);
-      setRegistrationSuccess(true);
-      // Redirect after a short delay to show success message
-      setTimeout(() => navigate('/'), 1500);
+      
+      // Check if user is annotator and needs onboarding
+      if (formData.user_type === 'annotator') {
+        setNeedsOnboarding(true);
+        setRegistrationSuccess(true);
+        // Don't navigate immediately - show onboarding prompt
+      } else {
+        setRegistrationSuccess(true);
+        // Redirect after a short delay to show success message
+        setTimeout(() => navigate('/'), 1500);
+      }
     } catch (error: unknown) {
       if (error instanceof Error) {
         setError(error.message || 'Registration failed. Please try again.');
@@ -218,13 +227,20 @@ const Register: React.FC = () => {
             <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
               <div 
                 className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary-500 transition-all"
-                style={{ width: currentStep === 1 ? '33.33%' : currentStep === 2 ? '66.67%' : '100%' }}
+                style={{ 
+                  width: currentStep === 1 ? '33.33%' : 
+                         currentStep === 2 ? '66.67%' : 
+                         '100%' 
+                }}
               ></div>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span className={currentStep >= 1 ? "font-semibold text-primary-600" : ""}>User Type</span>
               <span className={currentStep >= 2 ? "font-semibold text-primary-600" : ""}>Personal Info</span>
               <span className={currentStep >= 3 ? "font-semibold text-primary-600" : ""}>Account Details</span>
+              {formData.user_type === 'annotator' && (
+                <span className={currentStep >= 4 ? "font-semibold text-primary-600" : ""}>Qualification</span>
+              )}
             </div>
           </div>
         </div>
@@ -240,10 +256,58 @@ const Register: React.FC = () => {
                 Your account has been created successfully as a{' '}
                 <span className="font-semibold">{formData.user_type}</span>.
               </p>
-              <p className="text-gray-500 text-sm">Redirecting to login page...</p>
-              <div className="mt-4 w-24 h-1 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 animate-pulse"></div>
-              </div>
+              
+              {needsOnboarding ? (                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 w-full">
+                    <div className="flex items-start">
+                      <div className="rounded-full bg-blue-100 p-2 mr-3">
+                        <FileText className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div className="text-left">
+                        <h4 className="font-semibold text-blue-900 mb-1">
+                          🎯 One More Step - Qualification Test
+                        </h4>
+                        <p className="text-sm text-blue-800 mb-3">
+                          To ensure high-quality annotations, we'd like you to complete a brief 
+                          qualification test. It's friendly and designed to help you succeed!
+                        </p>
+                        <div className="bg-blue-25 rounded-md p-3 mb-3">
+                          <div className="flex items-center text-blue-700 text-xs mb-2">
+                            <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                            <span>Takes ~15 minutes</span>
+                            <span className="w-2 h-2 bg-blue-400 rounded-full mx-2"></span>
+                            <span>Friendly & supportive</span>
+                            <span className="w-2 h-2 bg-yellow-400 rounded-full mx-2"></span>
+                            <span>Learning opportunity</span>
+                          </div>
+                          <p className="text-xs text-blue-600 italic">
+                            💡 This helps us understand your current skills so we can provide better support!
+                          </p>
+                        </div>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => navigate('/onboarding-test')}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                          >
+                            Start Qualification Test
+                          </button>
+                          <button
+                            onClick={() => navigate('/')}
+                            className="px-4 py-2 border border-blue-300 text-blue-700 text-sm font-medium rounded-md hover:bg-blue-50 transition-colors"
+                          >
+                            Do It Later
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+              ) : (
+                <>
+                  <p className="text-gray-500 text-sm">Redirecting to login page...</p>
+                  <div className="mt-4 w-24 h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 animate-pulse"></div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -290,6 +354,10 @@ const Register: React.FC = () => {
                             formData.user_type === 'annotator' ? 'text-primary-700' : 'text-gray-500'
                           }`}>
                             Review and annotate machine translations for quality and accuracy.
+                            <br />
+                            <span className="text-xs italic mt-1 block">
+                              ✨ Includes a friendly qualification test to ensure annotation quality and help you succeed!
+                            </span>
                           </p>
                         </div>
                         {formData.user_type === 'annotator' && (

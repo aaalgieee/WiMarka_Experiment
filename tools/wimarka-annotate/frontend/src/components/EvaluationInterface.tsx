@@ -72,7 +72,7 @@ const EvaluationInterface: React.FC = () => {
       
       if (targetAnnotation) {
         setAnnotation(targetAnnotation);
-        setEvaluation(prev => ({ ...prev, annotation_id: targetAnnotation.id }));
+        setEvaluation((prev: EvaluationCreate) => ({ ...prev, annotation_id: targetAnnotation.id }));
       } else {
         setMessage('Annotation not found or already evaluated');
         navigate('/evaluator');
@@ -92,7 +92,7 @@ const EvaluationInterface: React.FC = () => {
       if (pendingAnnotations.length > 0) {
         const nextAnnotation = pendingAnnotations[0];
         setAnnotation(nextAnnotation);
-        setEvaluation(prev => ({ ...prev, annotation_id: nextAnnotation.id }));
+        setEvaluation((prev: EvaluationCreate) => ({ ...prev, annotation_id: nextAnnotation.id }));
       } else {
         setMessage('No pending annotations to evaluate');
         navigate('/evaluator');
@@ -115,11 +115,11 @@ const EvaluationInterface: React.FC = () => {
   }, [annotationId, loadAnnotation, loadNextAnnotation]);
 
   const handleRatingChange = (field: keyof EvaluationCreate, value: number) => {
-    setEvaluation(prev => ({ ...prev, [field]: value }));
+    setEvaluation((prev: EvaluationCreate) => ({ ...prev, [field]: value }));
   };
 
   const handleTextChange = (field: keyof EvaluationCreate, value: string) => {
-    setEvaluation(prev => ({ ...prev, [field]: value }));
+    setEvaluation((prev: EvaluationCreate) => ({ ...prev, [field]: value }));
   };
 
   const calculateTimeSpent = (): number => {

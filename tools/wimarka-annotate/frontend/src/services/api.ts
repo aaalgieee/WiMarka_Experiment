@@ -16,6 +16,9 @@ import type {
   MTQualityAssessment,
   MTQualityCreate,
   MTQualityUpdate,
+  OnboardingTest,
+  OnboardingTestAnswer,
+  OnboardingTestResult,
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -132,6 +135,21 @@ export const annotationsAPI = {
 
   updateAnnotation: async (id: number, annotationData: AnnotationUpdate): Promise<Annotation> => {
     const response = await api.put(`/annotations/${id}`, annotationData);
+    return response.data;
+  },
+
+  uploadVoiceRecording: async (audioBlob: Blob, annotationId?: number): Promise<{ voice_recording_url: string; voice_recording_duration: number }> => {
+    const formData = new FormData();
+    formData.append('audio_file', audioBlob, 'voice_recording.webm');
+    if (annotationId) {
+      formData.append('annotation_id', annotationId.toString());
+    }
+    
+    const response = await api.post('/annotations/upload-voice', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
@@ -276,6 +294,32 @@ export const evaluationsAPI = {
 
   getAnnotationEvaluations: async (annotationId: number): Promise<Evaluation[]> => {
     const response = await api.get(`/annotations/${annotationId}/evaluations`);
+    return response.data;
+  },
+};
+
+// Onboarding Test API
+export const onboardingAPI = {
+  createTest: async (language: string): Promise<OnboardingTest> => {
+    const response = await api.post('/onboarding-tests', { language });
+    return response.data;
+  },
+
+  submitTest: async (testId: number, answers: OnboardingTestAnswer[]): Promise<OnboardingTestResult> => {
+    const response = await api.post(`/onboarding-tests/${testId}/submit`, {
+      test_id: testId,
+      answers
+    });
+    return response.data;
+  },
+
+  getMyTests: async (): Promise<OnboardingTest[]> => {
+    const response = await api.get('/onboarding-tests/my-tests');
+    return response.data;
+  },
+
+  getTest: async (testId: number): Promise<OnboardingTest> => {
+    const response = await api.get(`/onboarding-tests/${testId}`);
     return response.data;
   },
 };

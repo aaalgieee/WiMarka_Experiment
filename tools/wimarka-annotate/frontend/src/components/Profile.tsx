@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { User, Settings, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Save, AlertCircle, CheckCircle } from 'lucide-react';
 
 // This component will allow users to update their profile settings
 const Profile: React.FC = () => {
@@ -97,7 +97,7 @@ const Profile: React.FC = () => {
         setIsLoading(false);
         setIsDirty(false);
       }, 1000);
-    } catch (error) {
+    } catch {
       setError('Failed to update profile. Please try again.');
       setIsLoading(false);
     }

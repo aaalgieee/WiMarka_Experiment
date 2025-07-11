@@ -27,6 +27,9 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     is_evaluator = Column(Boolean, default=False)  # New field for evaluator role
     guidelines_seen = Column(Boolean, default=False)
+    onboarding_status = Column(String, default='pending')  # 'pending', 'in_progress', 'completed', 'failed'
+    onboarding_score = Column(Float, nullable=True)  # Overall onboarding test score (0-100)
+    onboarding_completed_at = Column(DateTime, nullable=True)  # When onboarding was completed
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -34,6 +37,7 @@ class User(Base):
     evaluations = relationship("Evaluation", back_populates="evaluator")
     mt_assessments = relationship("MTQualityAssessment", back_populates="evaluator")
     languages = relationship("UserLanguage", back_populates="user")
+    onboarding_tests = relationship("OnboardingTest", back_populates="user")
 
 class UserLanguage(Base):
     __tablename__ = "user_languages"
@@ -106,6 +110,10 @@ class Annotation(Base):
     suggested_correction = Column(Text)  # Legacy field - Suggested improved translation
     comments = Column(Text)  # General comments (in addition to highlight-specific comments)
     final_form = Column(Text)  # Final corrected form of the sentence
+    
+    # Voice recording for final form
+    voice_recording_url = Column(String, nullable=True)  # URL/path to audio file
+    voice_recording_duration = Column(Integer, nullable=True)  # Duration in seconds
     
     # Metadata
     time_spent_seconds = Column(Integer)  # Time spent on annotation
@@ -189,6 +197,21 @@ class Evaluation(Base):
     # Relationships
     annotation = relationship("Annotation", back_populates="evaluations")
     evaluator = relationship("User", back_populates="evaluations")
+
+class OnboardingTest(Base):
+    __tablename__ = "onboarding_tests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    language = Column(String)  # Language being tested
+    test_data = Column(JSON)  # Test questions and answers in JSON format
+    score = Column(Float, nullable=True)  # Test score (0-100)
+    status = Column(String, default='in_progress')  # 'in_progress', 'completed', 'failed'
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="onboarding_tests")
 
 def create_tables():
     Base.metadata.create_all(bind=engine)

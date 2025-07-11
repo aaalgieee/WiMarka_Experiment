@@ -51,8 +51,8 @@ const EvaluatorDashboard: React.FC = () => {
   };
 
   const getCompletionRate = (): number => {
-    if (!stats || stats.total_assessments === 0) return 0;
-    return Math.round((stats.completed_assessments / stats.total_assessments) * 100);
+    if (!stats || !stats.total_assessments || stats.total_assessments === 0) return 0;
+    return Math.round(((stats.completed_assessments || 0) / stats.total_assessments) * 100);
   };
 
   if (isLoading) {

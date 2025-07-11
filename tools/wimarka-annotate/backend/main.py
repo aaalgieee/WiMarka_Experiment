@@ -1,13 +1,18 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List, Optional
 import json
+import os
+import uuid
+import shutil
+from pathlib import Path
 
 from evaluator import DistilBERTMTEvaluator, evaluate_mt_quality
 
-from database import get_db, create_tables, User, Sentence, Annotation, TextHighlight, UserLanguage, Evaluation, MTQualityAssessment
+from database import get_db, create_tables, User, Sentence, Annotation, TextHighlight, UserLanguage, Evaluation, MTQualityAssessment, OnboardingTest
 from auth import (
     authenticate_user, 
     create_access_token, 
@@ -43,7 +48,11 @@ from schemas import (
     MTQualityAssessmentResponse,
     MTEvaluatorStats,
     SyntaxErrorSchema,
-    SemanticErrorSchema
+    SemanticErrorSchema,
+    OnboardingTestCreate,
+    OnboardingTestSubmission,
+    OnboardingTestResponse,
+    OnboardingTestQuestion
 )
 
 app = FastAPI(title="WiMarka - Annotation Tool", version="1.0.0")
@@ -56,6 +65,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Create uploads directory for voice recordings
+UPLOAD_DIR = Path("uploads/audio")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files for serving audio files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Create tables on startup
 @app.on_event("startup")
@@ -1485,6 +1501,255 @@ def update_user_languages(languages: List[str], current_user: User = Depends(get
     db.commit()
     
     return languages
+
+@app.post("/api/annotations/upload-voice")
+async def upload_voice_recording(
+    audio_file: UploadFile = File(...),
+    annotation_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload voice recording for annotation final form"""
+    
+    # Validate file type
+    if not audio_file.content_type or not audio_file.content_type.startswith('audio/'):
+        raise HTTPException(status_code=400, detail="File must be an audio file")
+    
+    # Generate unique filename
+    file_extension = audio_file.filename.split('.')[-1] if '.' in audio_file.filename else 'webm'
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    try:
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(audio_file.file, buffer)
+        
+        # Calculate file duration (basic estimation based on file size)
+        # For more accurate duration, you could use audio processing libraries
+        file_size = file_path.stat().st_size
+        estimated_duration = max(1, file_size // 1000)  # Rough estimation: 1 second per KB
+        
+        # Generate URL for accessing the file
+        voice_recording_url = f"/uploads/audio/{unique_filename}"
+        
+        # If annotation_id is provided, update the annotation
+        if annotation_id:
+            annotation = db.query(Annotation).filter(
+                Annotation.id == int(annotation_id),
+                Annotation.annotator_id == current_user.id
+            ).first()
+            
+            if annotation:
+                # Remove old voice recording file if it exists
+                if annotation.voice_recording_url:
+                    old_file_path = Path("uploads") / annotation.voice_recording_url.lstrip("/uploads/")
+                    if old_file_path.exists():
+                        old_file_path.unlink()
+                
+                annotation.voice_recording_url = voice_recording_url
+                annotation.voice_recording_duration = estimated_duration
+                db.commit()
+        
+        return {
+            "voice_recording_url": voice_recording_url,
+            "voice_recording_duration": estimated_duration,
+            "message": "Voice recording uploaded successfully"
+        }
+        
+    except Exception as e:
+        # Clean up file if something went wrong
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Failed to upload voice recording: {str(e)}")
+
+# Onboarding Test endpoints
+@app.post("/api/onboarding-tests", response_model=OnboardingTestResponse)
+def create_onboarding_test(
+    test_data: OnboardingTestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new onboarding test for the user"""
+    
+    # Check if user already has an incomplete test
+    existing_test = db.query(OnboardingTest).filter(
+        OnboardingTest.user_id == current_user.id,
+        OnboardingTest.status == 'in_progress'
+    ).first()
+    
+    if existing_test:
+        return OnboardingTestResponse.from_orm(existing_test)
+    
+    # Sample test questions for the onboarding test
+    test_questions = [
+        {
+            "id": "1",
+            "source_text": "The weather is beautiful today.",
+            "machine_translation": "Ang panahon ay maganda ngayon.",
+            "source_language": "English",
+            "target_language": "Tagalog",
+            "correct_fluency_score": 5,
+            "correct_adequacy_score": 5,
+            "error_types": [],
+            "explanation": "This is an excellent translation with perfect fluency and adequacy. No errors present."
+        },
+        {
+            "id": "2",
+            "source_text": "I will go to the hospital tomorrow.",
+            "machine_translation": "Ako ay pupunta sa ospital bukas.",
+            "source_language": "English",
+            "target_language": "Tagalog",
+            "correct_fluency_score": 4,
+            "correct_adequacy_score": 5,
+            "error_types": ["MI_ST"],
+            "explanation": "Good translation with complete meaning preserved. Minor stylistic issue - could be more natural as 'Pupunta ako sa ospital bukas.'"
+        },
+        {
+            "id": "3",
+            "source_text": "She plays the piano very well.",
+            "machine_translation": "Siya ay naglalaro ng piano nang napakahusay.",
+            "source_language": "English",
+            "target_language": "Tagalog",
+            "correct_fluency_score": 2,
+            "correct_adequacy_score": 3,
+            "error_types": ["MI_SE", "MA_SE"],
+            "explanation": "Incorrect verb choice - 'naglalaro' (playing games) instead of 'tumutugtog' (playing instrument). This affects both fluency and adequacy."
+        }
+    ]
+    
+    # Create new test
+    onboarding_test = OnboardingTest(
+        user_id=current_user.id,
+        language=test_data.language,
+        test_data={"questions": test_questions},
+        status='in_progress'
+    )
+    
+    db.add(onboarding_test)
+    db.commit()
+    db.refresh(onboarding_test)
+    
+    return OnboardingTestResponse.from_orm(onboarding_test)
+
+@app.post("/api/onboarding-tests/{test_id}/submit", response_model=dict)
+def submit_onboarding_test(
+    test_id: int,
+    submission: OnboardingTestSubmission,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Submit answers for an onboarding test and calculate score"""
+    
+    # Get the test
+    test = db.query(OnboardingTest).filter(
+        OnboardingTest.id == test_id,
+        OnboardingTest.user_id == current_user.id
+    ).first()
+    
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+    
+    if test.status != 'in_progress':
+        raise HTTPException(status_code=400, detail="Test already completed")
+    
+    # Calculate score
+    questions = test.test_data.get("questions", [])
+    total_score = 0
+    max_score = 0
+    
+    for question in questions:
+        user_answer = next((a for a in submission.answers if a.get("question_id") == question["id"]), None)
+        if not user_answer:
+            continue
+            
+        max_score += 20  # 20 points per question
+        
+        # Score fluency (max 5 points)
+        fluency_diff = abs(user_answer.get("fluency_score", 0) - question["correct_fluency_score"])
+        fluency_score = max(0, 5 - fluency_diff)
+        
+        # Score adequacy (max 5 points) 
+        adequacy_diff = abs(user_answer.get("adequacy_score", 0) - question["correct_adequacy_score"])
+        adequacy_score = max(0, 5 - adequacy_diff)
+        
+        # Score error identification (max 10 points)
+        correct_errors = question.get("error_types", [])
+        identified_errors = user_answer.get("identified_errors", [])
+        error_score = 0
+        
+        if len(correct_errors) == 0 and len(identified_errors) == 0:
+            error_score = 10  # Perfect - no errors to find and none found
+        elif len(correct_errors) > 0:
+            correctly_identified = len([e for e in correct_errors if e in identified_errors])
+            false_positives = len([e for e in identified_errors if e not in correct_errors])
+            error_score = max(0, (correctly_identified / len(correct_errors)) * 10 - false_positives * 2)
+        
+        total_score += fluency_score + adequacy_score + error_score
+    
+    # Calculate percentage
+    final_score = (total_score / max_score) * 100 if max_score > 0 else 0
+    passed = final_score >= 70
+    
+    # Update test
+    test.score = final_score
+    test.status = 'completed' if passed else 'failed'
+    test.completed_at = datetime.utcnow()
+    test.test_data["submission"] = submission.answers
+    test.test_data["detailed_scores"] = {
+        "total_score": total_score,
+        "max_score": max_score,
+        "percentage": final_score
+    }
+    
+    # Update user onboarding status
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if user:
+        if passed:
+            user.onboarding_status = 'completed'
+            user.onboarding_score = final_score
+            user.onboarding_completed_at = datetime.utcnow()
+        else:
+            user.onboarding_status = 'failed'
+            user.onboarding_score = final_score
+    
+    db.commit()
+    
+    return {
+        "score": final_score,
+        "passed": passed,
+        "status": test.status,
+        "message": "Congratulations! You passed the onboarding test." if passed else "Please review the guidelines and try again."
+    }
+
+@app.get("/api/onboarding-tests/my-tests", response_model=List[OnboardingTestResponse])
+def get_my_onboarding_tests(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get user's onboarding tests"""
+    tests = db.query(OnboardingTest).filter(
+        OnboardingTest.user_id == current_user.id
+    ).order_by(OnboardingTest.started_at.desc()).all()
+    
+    return [OnboardingTestResponse.from_orm(test) for test in tests]
+
+@app.get("/api/onboarding-tests/{test_id}", response_model=OnboardingTestResponse) 
+def get_onboarding_test(
+    test_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific onboarding test"""
+    test = db.query(OnboardingTest).filter(
+        OnboardingTest.id == test_id,
+        OnboardingTest.user_id == current_user.id
+    ).first()
+    
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+    
+    return OnboardingTestResponse.from_orm(test)
 
 if __name__ == "__main__":
     import uvicorn

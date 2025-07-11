@@ -437,26 +437,26 @@ const MTQualityInterface: React.FC = () => {
                     <h2 className="text-xl font-semibold text-gray-900">Quality Scores</h2>
                     <div className="flex items-center text-sm text-gray-500">
                       <Clock className="h-4 w-4 mr-1" />
-                      {assessment.processing_time_ms}ms
+                      {assessment.time_spent_seconds ? `${assessment.time_spent_seconds}s` : 'N/A'}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     <ScoreDisplay
                       label="Fluency"
-                      score={assessment.fluency_score}
+                      score={assessment.fluency_score || 0}
                       description="Grammar & readability"
                       color="border-blue-200 bg-blue-50"
                     />
                     <ScoreDisplay
                       label="Adequacy"
-                      score={assessment.adequacy_score}
+                      score={assessment.adequacy_score || 0}
                       description="Meaning preservation"
                       color="border-green-200 bg-green-50"
                     />
                     <ScoreDisplay
                       label="Overall"
-                      score={assessment.overall_quality_score}
+                      score={assessment.overall_quality_score || 0}
                       description="Combined quality"
                       color="border-purple-200 bg-purple-50"
                     />
@@ -465,7 +465,7 @@ const MTQualityInterface: React.FC = () => {
                   <div className="flex items-center justify-center p-3 bg-gray-50 rounded-lg">
                     <Star className="h-5 w-5 text-yellow-500 mr-2" />
                     <span className="text-sm font-medium">
-                      Model Confidence: {Math.round(assessment.model_confidence * 100)}%
+                      Model Confidence: {assessment.ai_confidence_level ? Math.round(assessment.ai_confidence_level * 100) : 'N/A'}%
                     </span>
                   </div>
                 </div>
@@ -476,20 +476,20 @@ const MTQualityInterface: React.FC = () => {
                   
                   <div className="space-y-4">
                     <ErrorDisplay
-                      errors={assessment.syntax_errors}
+                      errors={assessment.ai_errors?.filter(e => e.type === 'syntax') || []}
                       title="Syntax Errors"
                       icon={<AlertTriangle className="h-5 w-5 text-orange-500" />}
                       colorClass="border-orange-200 bg-orange-50"
                     />
                     
                     <ErrorDisplay
-                      errors={assessment.semantic_errors}
+                      errors={assessment.ai_errors?.filter(e => e.type === 'semantic') || []}
                       title="Semantic Errors"
                       icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
                       colorClass="border-red-200 bg-red-50"
                     />
 
-                    {assessment.syntax_errors.length === 0 && assessment.semantic_errors.length === 0 && (
+                    {(!assessment.ai_errors || assessment.ai_errors.length === 0) && (
                       <div className="text-center p-6 bg-green-50 border border-green-200 rounded-lg">
                         <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
                         <p className="text-green-800 font-medium">No errors detected!</p>
@@ -503,20 +503,15 @@ const MTQualityInterface: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">AI Explanation</h2>
                   <p className="text-gray-700 leading-relaxed mb-4">
-                    {assessment.quality_explanation}
+                    {assessment.ai_explanation || 'No detailed explanation available.'}
                   </p>
                   
-                  {assessment.correction_suggestions.length > 0 && (
+                  {assessment.ai_suggestions && (
                     <>
                       <h3 className="text-sm font-medium text-gray-700 mb-2">Suggestions</h3>
-                      <ul className="space-y-1">
-                        {assessment.correction_suggestions.map((suggestion, index) => (
-                          <li key={index} className="text-sm text-gray-600 flex items-start">
-                            <span className="text-blue-500 mr-2">•</span>
-                            {suggestion}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="text-sm text-gray-600">
+                        {assessment.ai_suggestions}
+                      </div>
                     </>
                   )}
                 </div>

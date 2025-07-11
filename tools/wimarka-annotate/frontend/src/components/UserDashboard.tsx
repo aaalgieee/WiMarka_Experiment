@@ -49,6 +49,15 @@ const UserDashboard: React.FC = () => {
   // User onboarding journey steps
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStep[]>([
     {
+      id: 'qualification_test',
+      title: 'Complete Qualification Test',
+      description: 'Take our friendly annotation qualification test to verify your skills',
+      icon: CheckCircle,
+      buttonText: 'Take Test',
+      buttonLink: '/onboarding-test',
+      completed: user?.onboarding_status === 'completed' || false
+    },
+    {
       id: 'read_guidelines',
       title: 'Read Guidelines',
       description: 'Understand the annotation guidelines before starting your work',

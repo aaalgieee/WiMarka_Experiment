@@ -15,6 +15,7 @@ import EvaluatorDashboard from './components/EvaluatorDashboard';
 import EvaluationInterface from './components/EvaluationInterface';
 import MyEvaluations from './components/MyEvaluations';
 import MTQualityInterface from './components/MTQualityInterface';
+import OnboardingTest from './components/OnboardingTest';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ 
@@ -179,6 +180,16 @@ const AppContent: React.FC = () => {
               <PublicRoute>
                 <Register />
               </PublicRoute>
+            } 
+          />
+
+          {/* Onboarding Test Route */}
+          <Route 
+            path="/onboarding-test" 
+            element={
+              <ProtectedRoute userOnly>
+                <OnboardingTest />
+              </ProtectedRoute>
             } 
           />
           

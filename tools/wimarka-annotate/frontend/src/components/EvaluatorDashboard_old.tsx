@@ -4,36 +4,12 @@ import type { EvaluatorStats, Sentence, MTQualityAssessment } from '../types';
 import { 
   FileText, 
   Clock, 
-  Star, 
   CheckCircle,
   AlertCircle,
-  BarChart3,
-  Eye,
   Target,
-  Award,
   Brain,
   Zap,
-  TrendingUp,
-  Calendar
-} from 'lucide-react';
-
-import React, { useState, useEffect } from 'react';
-import { mtQualityAPI } from '../services/api';
-import type { EvaluatorStats, Sentence, MTQualityAssessment } from '../types';
-import { 
-  FileText, 
-  Clock, 
-  Star, 
-  CheckCircle,
-  AlertCircle,
-  BarChart3,
-  Eye,
-  Target,
-  Award,
-  Brain,
-  Zap,
-  TrendingUp,
-  Calendar
+  TrendingUp
 } from 'lucide-react';
 
 const EvaluatorDashboard: React.FC = () => {
@@ -75,8 +51,8 @@ const EvaluatorDashboard: React.FC = () => {
   };
 
   const getCompletionRate = (): number => {
-    if (!stats || stats.total_assessments === 0) return 0;
-    return Math.round((stats.completed_assessments / stats.total_assessments) * 100);
+    if (!stats || !stats.total_assessments || stats.total_assessments === 0) return 0;
+    return Math.round(((stats.completed_assessments || 0) / stats.total_assessments) * 100);
   };
 
   if (isLoading) {
@@ -393,7 +369,5 @@ const EvaluatorDashboard: React.FC = () => {
     </div>
   );
 };
-
-export default EvaluatorDashboard;
 
 export default EvaluatorDashboard;

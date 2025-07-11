@@ -36,6 +36,9 @@ class UserResponse(UserBase):
     is_admin: bool
     is_evaluator: bool = False
     guidelines_seen: bool
+    onboarding_status: str = 'pending'
+    onboarding_score: Optional[float] = None
+    onboarding_completed_at: Optional[datetime] = None
     created_at: datetime
     languages: List[str] = []  # Include the languages in the response
 
@@ -131,6 +134,8 @@ class AnnotationBase(BaseModel):
     suggested_correction: Optional[str] = None  # Legacy field
     comments: Optional[str] = None  # General comments
     final_form: Optional[str] = None  # Final corrected form of the sentence
+    voice_recording_url: Optional[str] = None  # URL/path to audio file
+    voice_recording_duration: Optional[int] = None  # Duration in seconds
     time_spent_seconds: Optional[int] = None
 
 class AnnotationCreate(AnnotationBase):
@@ -323,6 +328,35 @@ class EvaluationResponse(EvaluationBase):
     updated_at: datetime
     annotation: AnnotationResponse
     evaluator: UserResponse
+
+# Onboarding Test schemas
+class OnboardingTestQuestion(BaseModel):
+    id: str
+    source_text: str
+    machine_translation: str
+    source_language: str
+    target_language: str
+    correct_fluency_score: int  # Expected score 1-5
+    correct_adequacy_score: int  # Expected score 1-5
+    error_types: List[str] = []  # Expected error types to be identified
+    explanation: str  # Explanation of why these scores are correct
+
+class OnboardingTestCreate(BaseModel):
+    language: str
+
+class OnboardingTestSubmission(BaseModel):
+    test_id: int
+    answers: List[dict]  # User's answers to test questions
+
+class OnboardingTestResponse(BaseModel):
+    id: int
+    user_id: int
+    language: str
+    test_data: dict
+    score: Optional[float] = None
+    status: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
 
     model_config = {
         "from_attributes": True

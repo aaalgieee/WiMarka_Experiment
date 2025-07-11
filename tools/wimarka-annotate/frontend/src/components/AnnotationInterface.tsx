@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { sentencesAPI, annotationsAPI } from '../services/api';
 import type { Sentence, AnnotationCreate, AnnotationUpdate, TextHighlight } from '../types';
 import { ChevronRight, Check, AlertCircle, Clock, MessageCircle, Trash2, Plus, Highlighter } from 'lucide-react';
+import VoiceRecorder from './VoiceRecorder';
 
 interface TextSegment extends Omit<TextHighlight, 'id' | 'annotation_id' | 'created_at'> {
   id: string; // temporary local ID for UI
@@ -15,6 +16,9 @@ interface SentenceAnnotation {
   overall_quality?: number;
   comments: string;
   final_form: string;
+  voice_recording_url?: string;
+  voice_recording_duration?: number;
+  voice_recording_blob?: Blob;
   time_spent_seconds: number;
   highlights: TextSegment[];
   isExpanded?: boolean;
@@ -88,6 +92,8 @@ const AnnotationInterface: React.FC = () => {
                 overall_quality: existingAnnotation.overall_quality,
                 comments: existingAnnotation.comments || '',
                 final_form: existingAnnotation.final_form || '',
+                voice_recording_url: existingAnnotation.voice_recording_url,
+                voice_recording_duration: existingAnnotation.voice_recording_duration,
                 time_spent_seconds: existingAnnotation.time_spent_seconds || 0,
                 highlights: convertedHighlights,
                 isExpanded: true, // Expand the sentence when coming from a direct link
@@ -507,6 +513,8 @@ const AnnotationInterface: React.FC = () => {
 
     setSubmittingIds(prev => new Set(prev).add(pendingSubmitSentenceId));
     try {
+      let savedAnnotation;
+      
       if (annotation.annotation_id) {
         // Update existing annotation
         const updateData: AnnotationUpdate = {
@@ -520,7 +528,7 @@ const AnnotationInterface: React.FC = () => {
           highlights: highlights,
         };
         
-        await annotationsAPI.updateAnnotation(annotation.annotation_id, updateData);
+        savedAnnotation = await annotationsAPI.updateAnnotation(annotation.annotation_id, updateData);
         setMessage('Annotation updated successfully!');
       } else {
         // Create new annotation
@@ -535,8 +543,22 @@ const AnnotationInterface: React.FC = () => {
           highlights: highlights,
         };
 
-        await annotationsAPI.createAnnotation(annotationData);
+        savedAnnotation = await annotationsAPI.createAnnotation(annotationData);
         setMessage('Annotation saved successfully!');
+      }
+
+      // Upload voice recording if present
+      if (annotation.voice_recording_blob && savedAnnotation) {
+        try {
+          const voiceResult = await annotationsAPI.uploadVoiceRecording(
+            annotation.voice_recording_blob,
+            savedAnnotation.id
+          );
+          console.log('Voice recording uploaded:', voiceResult);
+        } catch (voiceError) {
+          console.error('Failed to upload voice recording:', voiceError);
+          // Don't fail the whole submission for voice recording issues
+        }
       }
       
       // Remove the sentence from the list after successful submission
@@ -565,6 +587,37 @@ const AnnotationInterface: React.FC = () => {
     }
   };
 
+  const handleVoiceRecordingComplete = (sentenceId: number, audioBlob: Blob, duration: number) => {
+    setAnnotations(prev => {
+      const newMap = new Map(prev);
+      const annotation = newMap.get(sentenceId);
+      if (annotation) {
+        newMap.set(sentenceId, {
+          ...annotation,
+          voice_recording_blob: audioBlob,
+          voice_recording_duration: duration,
+        });
+      }
+      return newMap;
+    });
+  };
+
+  const handleVoiceRecordingDelete = (sentenceId: number) => {
+    setAnnotations(prev => {
+      const newMap = new Map(prev);
+      const annotation = newMap.get(sentenceId);
+      if (annotation) {
+        newMap.set(sentenceId, {
+          ...annotation,
+          voice_recording_blob: undefined,
+          voice_recording_duration: undefined,
+          voice_recording_url: undefined,
+        });
+      }
+      return newMap;
+    });
+  };
+
   const toggleExpanded = (sentenceId: number) => {
     const annotation = annotations.get(sentenceId);
     if (!annotation) return;
@@ -580,12 +633,10 @@ const AnnotationInterface: React.FC = () => {
     });
   };
 
-
-
   const RatingButtons: React.FC<{ 
     value: number | undefined; 
     onChange: (value: number) => void; 
-    label: string;
+    label: string; 
     compact?: boolean;
     showRequired?: boolean;
   }> = ({ value, onChange, label, compact = false, showRequired = false }) => (
@@ -896,6 +947,22 @@ const AnnotationInterface: React.FC = () => {
                                   Since you highlighted errors above, please write how the sentence should be corrected
                                 </p>
                               )}
+                              
+                              {/* Voice Recording Section */}
+                              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                  Voice Recording (Optional)
+                                </label>
+                                <VoiceRecorder
+                                  onRecordingComplete={(audioBlob, duration) => 
+                                    handleVoiceRecordingComplete(sentence.id, audioBlob, duration)
+                                  }
+                                  onRecordingDelete={() => handleVoiceRecordingDelete(sentence.id)}
+                                  existingRecordingUrl={annotation.voice_recording_url}
+                                  existingDuration={annotation.voice_recording_duration}
+                                  disabled={false}
+                                />
+                              </div>
                             </>
                           );
                         })()}
